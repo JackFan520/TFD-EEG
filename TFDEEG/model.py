@@ -7,17 +7,13 @@ from config import *
 _, os.environ['CUDA_VISIBLE_DEVICES'] = set_config()
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-#滑动因果频率 + 树卷积
-
 class TFDEEG(nn.Module):
-#temporal_learner 方法定义了一个时间卷积块，用于提取时间特征。包含一个二维卷积层和一个功率层，用于对卷积后的特征进行幂变换。
     def temporal_learner(
             self, in_chan, out_chan, kernel, pool, pool_step_rate):
         return nn.Sequential(
             nn.Conv2d(in_chan, out_chan, kernel_size=kernel, stride=(1, 1)),
             PowerLayer(dim=-1, length=pool, step=int(pool_step_rate * pool))
         )
-#__init__ 方法初始化了 ATDGNN 模型的各种参数和层
     def __init__(self, num_classes, res_scale ,input_size, sampling_rate, num_T,
                  out_graph, dropout_rate, pool, pool_step_rate, idx_graph):
         super(TFDEEG, self).__init__()
@@ -32,7 +28,6 @@ class TFDEEG(nn.Module):
         self.channel = input_size[1]
         self.brain_area = len(self.idx)
         ###################
-        # 多头注意力相关参数
         self.model_dim = round(num_T / 2)
         self.num_heads = 8
         if sampling_rate == 200:
@@ -64,7 +59,6 @@ class TFDEEG(nn.Module):
             nn.AvgPool2d((1, 2))
         )
         #######################################
-        # 特征整合、滑动窗口相关配置
         self.feature_integrator = FeatureIntegrator(sr=sampling_rate, res_scale=res_scale , in_channels=32, out_channels=self.model_dim)
         self.sliding_window_processor = SlidingWindowProcessor(
             model_dim=self.model_dim,
@@ -604,7 +598,7 @@ class SlidingWindowProcessor(nn.Module):
             std_attn_out = self.layer_norm_std(std_attn_out + window_norm)  # (B, window_size, model_dim)
             branchA = self.tcn_block(std_attn_out.permute(0, 2, 1))  # (B, 32, window_size)
 
-            #### 支路 B：串联简化版频域特征提取 -> 因果多头注意力模块
+            #### 支路 B：串联频域特征提取 -> 因果多头注意力模块
             # 统一输入形状 (B, model_dim, window_size)
             window_for_B = window  # (B, model_dim, window_size)
             branchB_inter_f = self.freq_branch(window_for_B)  # (B, model_dim, window_size)
@@ -677,4 +671,5 @@ class Aggregator():
 
     def aggr_fun(self, x, dim):
         # return torch.max(x, dim=dim).values
+
         return torch.mean(x, dim=dim)
