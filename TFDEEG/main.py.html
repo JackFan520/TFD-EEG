@@ -1,0 +1,32 @@
+<html>
+<head>
+<title>main.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #0033b3;}
+.s1 { color: #080808;}
+.s2 { color: #067d17;}
+</style>
+</head>
+<body bgcolor="#ffffff">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#c0c0c0" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+main.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">config.config </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">train.cross_validation </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">train.prepare_data </span><span class="s0">import </span><span class="s1">*</span>
+
+<span class="s0">if </span><span class="s1">__name__ == </span><span class="s2">'__main__'</span><span class="s1">:</span>
+    <span class="s1">args, _ = set_config()</span>
+    <span class="s1">sub_to_run = np.arange(args.subjects)</span>
+    <span class="s1">pd = PrepareData(args)</span>
+    <span class="s1">pd.run(sub_to_run, split=</span><span class="s0">True</span><span class="s1">, expand=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cv = CrossValidation(args)</span>
+    <span class="s1">seed_all(args.random_seed)</span>
+    <span class="s1">cv.n_fold_CV(subject=sub_to_run, fold=args.fold, reproduce=args.reproduce)</span>
+
+</pre>
+</body>
+</html>
