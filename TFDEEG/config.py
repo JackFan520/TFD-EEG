@@ -19,7 +19,7 @@ def set_config():
     parser.add_argument('--bandpass', type=tuple, default=(1, 50))
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--res_scale', type=float, default=0.3, choices=[0, 0.3, 0.5, 0.7]) #按照设备自己调整（Adjust according to the equipment itself）
-    parser.add_argument('--Residual_coefficient', type=float, default=0.03, choices=[0, 0.03, 0.05, 0.1, 0.5])#按照设备自己调整（Adjust according to the equipment itself）
+    parser.add_argument('--Residual_coefficient', type=float, default=0.03, choices=[0, 0.03, 0.05, 0.1, 0.3 ,0.5])#按照设备自己调整（Adjust according to the equipment itself）
 
 
     # Training Process
