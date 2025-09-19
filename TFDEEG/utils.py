@@ -82,7 +82,7 @@ def get_model(args):
     idx_local_graph = 0
     idx_local_graph = list(np.array(h5py.File('num_chan_local_graph_{}.hdf'.format(args.graph_type), 'r')['data']))
     model = TFDEEG(
-        num_classes=args.num_class,res_scale = args.res_scale , input_size=args.input_shape,
+        num_classes=args.num_class,res_scale = args.res_scale ,Residual_coefficient = args.Residual_coefficient, input_size=args.input_shape,
         sampling_rate=args.target_rate,
         num_T=args.T, out_graph=args.hidden,
         dropout_rate=args.dropout,
@@ -155,3 +155,4 @@ class LabelSmoothing(nn.Module):
         smooth_loss = -logprobs.mean(dim=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
         return loss.mean()
+
