@@ -7,6 +7,7 @@ from config import *
 _, os.environ['CUDA_VISIBLE_DEVICES'] = set_config()
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
 class TFDEEG(nn.Module):
     def temporal_learner(
             self, in_chan, out_chan, kernel, pool, pool_step_rate):
@@ -14,7 +15,7 @@ class TFDEEG(nn.Module):
             nn.Conv2d(in_chan, out_chan, kernel_size=kernel, stride=(1, 1)),
             PowerLayer(dim=-1, length=pool, step=int(pool_step_rate * pool))
         )
-    def __init__(self, num_classes, res_scale ,input_size, sampling_rate, num_T,
+    def __init__(self, num_classes, res_scale ,Residual_coefficient ,input_size, sampling_rate, num_T,
                  out_graph, dropout_rate, pool, pool_step_rate, idx_graph):
         super(TFDEEG, self).__init__()
 
@@ -28,6 +29,7 @@ class TFDEEG(nn.Module):
         self.channel = input_size[1]
         self.brain_area = len(self.idx)
         ###################
+        # 多头注意力相关参数
         self.model_dim = round(num_T / 2)
         self.num_heads = 8
         if sampling_rate == 200:
@@ -62,6 +64,7 @@ class TFDEEG(nn.Module):
         self.feature_integrator = FeatureIntegrator(sr=sampling_rate, res_scale=res_scale , in_channels=32, out_channels=self.model_dim)
         self.sliding_window_processor = SlidingWindowProcessor(
             model_dim=self.model_dim,
+            Residual_coefficient=Residual_coefficient,
             num_heads=self.num_heads,
             window_size=self.window_size,
             stride=self.stride,
@@ -147,7 +150,7 @@ class TFDEEG(nn.Module):
         out = torch.reshape(out, (out.size(0), out.size(1), -1))
         out = self.local_filter_fun(out, self.local_filter_weight)
         out = self.aggregate.forward(out) # [B, 14, 2300]
-        # 2) 树形聚合（方案二简单版）→ [B,15,out_graph]
+        # 2) 树形聚合→ [B,15,out_graph]
         out = self.tree_conv(out)# [B,15,32]
         # 3) 标准化
         out = self.bn(out)
@@ -158,10 +161,8 @@ class TFDEEG(nn.Module):
         return out
 
 ##############################
-# —— 左右半球节点简单版 ——
-##############################
+
 class GraphConvolution_tree(nn.Module):
-    """树形结构的简单GCN层（1层卷积+ReLU）。"""
     def __init__(self, in_features, out_features, bias=True):
         super().__init__()
         self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
@@ -256,7 +257,7 @@ class TemporalConvBlock(nn.Module):
 
     def forward(self, x):
         return F.relu(self.norm(self.conv(x)))
-#原版带通(简单版),自己的采样率
+
 class BandPassSimpleMA(nn.Module):
     def __init__(self,res_scale, sr, bands=None ):
         super().__init__()
@@ -313,8 +314,6 @@ class FeatureIntegrator(nn.Module):
         return x
 
 #######滑动窗口技术###########################################################
-
-#####因果多头注意力模块（大队长3.2CT_MSA）######
 class TemporalAttention(nn.Module):
     def __init__(self, dim, heads=2, window_size=1, qkv_bias=False, qk_scale=None, dropout=0., causal=True,
                  device=None):
@@ -543,10 +542,11 @@ class FrequencyDetailBranch(nn.Module):
 ######################################
 ###########################################
 class SlidingWindowProcessor(nn.Module):
-    def __init__(self, model_dim, num_heads, window_size, stride, dropout=0.):
+    def __init__(self,Residual_coefficient ,model_dim, num_heads, window_size, stride, dropout=0.):
         super(SlidingWindowProcessor, self).__init__()
         self.window_size = window_size
         self.stride = stride
+        self.Residual_coefficient = Residual_coefficient
         # 每个窗口归一化，调整为 (B, window_size, model_dim)
         self.layer_norm = nn.LayerNorm([window_size, model_dim])
 
@@ -578,10 +578,7 @@ class SlidingWindowProcessor(nn.Module):
         self.fusion_conv = nn.Conv1d(32, 32, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
-        """
-        输入 x: (B, model_dim, L)
-        输出: 融合后的特征，形状 (B, 32, fused_length)
-        """
+
         batch_size, model_dim, length = x.shape
         window_outputs = []
 
@@ -598,14 +595,14 @@ class SlidingWindowProcessor(nn.Module):
             std_attn_out = self.layer_norm_std(std_attn_out + window_norm)  # (B, window_size, model_dim)
             branchA = self.tcn_block(std_attn_out.permute(0, 2, 1))  # (B, 32, window_size)
 
-            #### 支路 B：串联频域特征提取 -> 因果多头注意力模块
+            #### 支路 B：串联简化版频域特征提取 -> 因果多头注意力模块
             # 统一输入形状 (B, model_dim, window_size)
             window_for_B = window  # (B, model_dim, window_size)
             branchB_inter_f = self.freq_branch(window_for_B)  # (B, model_dim, window_size)
             branchB_inter_h = self.highpass(branchB_inter_f)
             branchB_inter_f = self.layer_norm_ct(branchB_inter_f.permute(0, 2, 1)).permute(0, 2, 1)
             branchB_inter_h = self.layer_norm_ct(branchB_inter_h.permute(0, 2, 1)).permute(0, 2, 1)
-            branchB_inter = branchB_inter_h * 0.03 + branchB_inter_f
+            branchB_inter = branchB_inter_h * self.Residual_coefficient + branchB_inter_f
             branchB_inter = self.layer_norm_ct(branchB_inter.permute(0, 2, 1)).permute(0, 2, 1)
             # branchB_inter = F.gelu(branchB_inter)
             # 调整形状供 CT_MSA 使用：CT_MSA 需要 (B, model_dim, 1, window_size)
@@ -671,5 +668,4 @@ class Aggregator():
 
     def aggr_fun(self, x, dim):
         # return torch.max(x, dim=dim).values
-
         return torch.mean(x, dim=dim)
