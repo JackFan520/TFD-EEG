@@ -22,7 +22,7 @@ class TFDEEG(nn.Module):
         self.num_T = num_T
         self.out_graph = out_graph
         self.dropout_rate = dropout_rate
-        self.window = [0.5, 0.25, 0.125]
+        self.window = [0.5, 0.25, 0.125] #LGGNet的原始窗口
         self.pool = pool
         self.pool_step_rate = pool_step_rate
         self.idx = idx_graph
@@ -669,3 +669,4 @@ class Aggregator():
     def aggr_fun(self, x, dim):
         # return torch.max(x, dim=dim).values
         return torch.mean(x, dim=dim)
+
